@@ -1,4 +1,4 @@
-package test
+package main
 
 //服务器端
 import (
@@ -54,7 +54,7 @@ func checkError1(err error) int {
 	return 1
 }
 
-//func main() {
-//	//开启服务
-//	startServer()
-//}
+func main() {
+	//开启服务
+	startServer()
+}
