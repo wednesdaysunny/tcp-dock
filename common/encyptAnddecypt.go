@@ -3,6 +3,7 @@ package common
 import (
 	"encoding/hex"
 	"github.com/golang/crypto/blowfish"
+	"strings"
 )
 
 const (
@@ -57,5 +58,6 @@ func Encrypt(str string) string {
 	cipher.Encrypt(dest, []byte(str))
 
 	result := byte2HexStr(dest)
+	result = strings.ToUpper(result)
 	return result
 }
