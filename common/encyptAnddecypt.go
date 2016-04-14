@@ -1,6 +1,7 @@
 package common
 
 import (
+	"encoding/hex"
 	"github.com/golang/crypto/blowfish"
 )
 
@@ -36,8 +37,8 @@ func hexStr2Bytes(src string) []byte {
 	return rtn
 }
 
-func byte2HexStr([]byte) string {
-	return nil
+func byte2HexStr(byteArr []byte) string {
+	return hex.EncodeToString(byteArr)
 }
 
 func Decrypt(str string) string {
@@ -51,5 +52,10 @@ func Decrypt(str string) string {
 }
 
 func Encrypt(str string) string {
-	return nil
+	cipher, _ := blowfish.NewCipher([]byte(key))
+	dest := make([]byte, 8)
+	cipher.Encrypt(dest, []byte(str))
+
+	result := byte2HexStr(dest)
+	return result
 }
