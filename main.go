@@ -116,6 +116,7 @@ type GlobalData struct {
 }
 
 func main() {
+	ShowVersion()
 	pool_connect, start_err := pool.NewChannelPool(INIT_CONNECT, MAX_CONNECT, CreateConnect)
 	for start_err != nil {
 		log.Println("NewChannelPool err", start_err)
