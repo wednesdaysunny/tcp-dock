@@ -17,15 +17,14 @@ var hexMap = map[string]byte{
 }
 
 func hexStr2Bytes(src string) []byte {
-	m, n := 0, 0
+	startCnt := 0
 	l := len(src) / 2
 	rtn := make([]byte, 0)
 
 	for i := 0; i < l; i++ {
-		m = i*2 + 1
-		n = m + 1
-		cha0 := src[i*2 : m]
-		cha1 := src[m:n]
+		startCnt = i*2 + 1
+		cha0 := Substr(src, i*2, 1)
+		cha1 := Substr(src, startCnt, 1)
 		i0, ok := hexMap[cha0]
 		i1, ok := hexMap[cha1]
 		if ok {
@@ -43,7 +42,7 @@ func byte2HexStr(byteArr []byte) string {
 }
 
 func Decrypt(str string) string {
-	ct := make([]byte, 0)
+	ct := make([]byte, 8)
 	cipher, _ := blowfish.NewCipher([]byte(key))
 	hexByteArr := hexStr2Bytes(str)
 	cipher.Decrypt(ct, hexByteArr)

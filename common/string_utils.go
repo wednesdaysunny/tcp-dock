@@ -60,7 +60,7 @@ func Substr(str string, start, length int) string {
 	return string(rune_str[start:end])
 }
 
-func randomString(length int) string {
+func RandomString(length int) string {
 	if length < 1 {
 		return ""
 	}
