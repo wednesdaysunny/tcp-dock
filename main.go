@@ -4,8 +4,8 @@ import (
 	//	"fmt"
 	"log"
 	"net"
-	//	"testing"
 	"tcp-dock/common"
+
 	"tcp-dock/pool"
 	"time"
 )
@@ -13,64 +13,6 @@ import (
 var (
 	RUN_FLAG = true
 )
-
-type GlobalData struct {
-	TcpChan       chan common.TcpTask
-	TimeChan      chan common.TimeTask
-	ReconnectChan chan int
-}
-
-func CheckReconnect(pool_connect pool.Pool, reconn_chan chan int) {
-	need_reconnect := 0
-	for RUN_FLAG {
-		select {
-		case count := <-reconn_chan:
-			log.Println("Start Reconnect:", count)
-			for i := 0; i < count; i += 1 {
-				if err := pool_connect.Reconnect(); err != nil {
-					need_reconnect += 1
-				}
-			}
-		case <-time.After(5 * time.Second):
-			log.Println("CheckReconnect", need_reconnect)
-			if need_reconnect > 0 {
-				reconn_chan <- need_reconnect
-				need_reconnect = 0
-			}
-
-		}
-	}
-}
-
-func OnProcessTcp(p pool.Pool, gb_data *GlobalData) error {
-	//	log.Println("Poollen:", p.Len())
-	pc, err := p.Get()
-	if err == nil {
-		defer pc.Close()
-		icount, err1 := pc.Write([]byte("1111111111"))
-		if err1 != nil && icount == 0 {
-			pc.MarkUnusable()
-			gb_data.ReconnectChan <- 1
-			log.Println("OnProcessTcp Lost Connect")
-		}
-	}
-	return err
-}
-
-func ProcessTcp(process_id int, p pool.Pool, gb_data *GlobalData) {
-	log.Println(process_id, "Start ProcessTcp", p, gb_data)
-	time.Sleep(time.Second)
-	for RUN_FLAG {
-		select {
-		case task := <-gb_data.TcpChan:
-			log.Println(process_id, "TcpTask Process", task)
-			if err := OnProcessTcp(p, gb_data); err != nil {
-				break
-			}
-		}
-	}
-	log.Println(process_id, "Stop ProcessTcp", p, gb_data)
-}
 
 type CustomizeSetting struct {
 	ServerHost string
@@ -98,6 +40,58 @@ func (setting *CustomizeSetting) GetChannelPool() pool.Pool {
 	return pool_connect
 }
 
+func OnProcessTcp(p pool.Pool, gb_task *common.GlobalTask) error {
+	//  log.Println("Poollen:", p.Len())
+	pc, err := p.Get()
+	if err == nil {
+		defer pc.Close()
+		icount, err1 := pc.Write([]byte("1111111111"))
+		if err1 != nil && icount == 0 {
+			pc.MarkUnusable()
+			gb_task.ReconnectChan <- 1
+			log.Println("OnProcessTcp Lost Connect")
+		}
+	}
+	return err
+}
+
+func ProcessTcp(process_id int, p pool.Pool, gb_task *common.GlobalTask) {
+	log.Println(process_id, "Start ProcessTcp", p, gb_task)
+	time.Sleep(time.Second)
+	for RUN_FLAG {
+		select {
+		case task := <-gb_task.TcpChan:
+			log.Println(process_id, "TcpTask Process", task)
+			if err := OnProcessTcp(p, gb_task); err != nil {
+				break
+			}
+		}
+	}
+	log.Println(process_id, "Stop ProcessTcp", p, gb_task)
+}
+
+func CheckReconnect(pool_connect pool.Pool, reconn_chan chan int) {
+	need_reconnect := 0
+	for RUN_FLAG {
+		select {
+		case count := <-reconn_chan:
+			log.Println("Start Reconnect:", count)
+			for i := 0; i < count; i += 1 {
+				if err := pool_connect.Reconnect(); err != nil {
+					need_reconnect += 1
+				}
+			}
+		case <-time.After(5 * time.Second):
+			log.Println("CheckReconnect", need_reconnect)
+			if need_reconnect > 0 {
+				reconn_chan <- need_reconnect
+				need_reconnect = 0
+			}
+
+		}
+	}
+}
+
 func main() {
 	ShowVersion()
 
@@ -112,19 +106,17 @@ func main() {
 	pool_connect := custom_setting.GetChannelPool()
 	defer pool_connect.Close()
 
-	gb_data := new(GlobalData)
-	gb_data.TcpChan = make(chan common.TcpTask, 20000)
-	gb_data.TimeChan = make(chan common.TimeTask, 20000)
-	gb_data.ReconnectChan = make(chan int, MAX_CONNECT)
+	gb_task := new(common.GlobalTask)
+	gb_task.InitTask(20000, 20000, MAX_CONNECT)
 
-	go CheckReconnect(pool_connect, gb_data.ReconnectChan)
+	go CheckReconnect(pool_connect, gb_task.ReconnectChan)
 	for i := 0; i < MAX_CONNECT; i += 1 {
-		go ProcessTcp(i, pool_connect, gb_data)
+		go ProcessTcp(i, pool_connect, gb_task)
 	}
 
 	for RUN_FLAG {
 		select {
-		case task := <-gb_data.TimeChan:
+		case task := <-gb_task.TimeChan:
 			log.Println("TimeTask Process", task)
 		}
 	}
