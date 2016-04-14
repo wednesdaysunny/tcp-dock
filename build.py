@@ -39,15 +39,15 @@ def run_cmd(cmd):
 
 
 def main():
+    global SYSTEM_FLAG
+    global TARGET_EXE_PATH
+    
     if len(sys.argv) >= 2:
         if sys.argv[1] in ("linux", "windows"):
-            global SYSTEM_FLAG
             SYSTEM_FLAG = sys.argv[1]
         elif len(sys.argv) == 2:
-            global TARGET_EXE_PATH
             TARGET_EXE_PATH = sys.argv[-1]
         if len(sys.argv) == 3:
-            global TARGET_EXE_PATH
             TARGET_EXE_PATH = sys.argv[-1]
 
     go_version_string = run_cmd("go version")

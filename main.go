@@ -1,44 +1,23 @@
 package main
 
 import (
-	"fmt"
+	//	"fmt"
 	"log"
 	"net"
 	//	"testing"
-	_ "tcp-dock/common"
+	"tcp-dock/common"
 	"tcp-dock/pool"
 	"time"
-)
-
-const (
-	SERVER_HOST  = "127.0.0.1:7777"
-	INIT_CONNECT = 5
-	MAX_CONNECT  = 10
 )
 
 var (
 	RUN_FLAG = true
 )
 
-type TaskProcess interface {
-	Process()
-}
-
-type TcpTask struct {
-	Cmd   string
-	Index int
-}
-
-func (task *TcpTask) Process(process_id int) {
-	log.Println(process_id, "TcpTask Process", task.Cmd, task.Index)
-}
-
-type TimeTask struct {
-	Index int
-}
-
-func (task *TimeTask) Process() {
-	log.Println("TimeTask Process", task.Index)
+type GlobalData struct {
+	TcpChan       chan common.TcpTask
+	TimeChan      chan common.TimeTask
+	ReconnectChan chan int
 }
 
 func CheckReconnect(pool_connect pool.Pool, reconn_chan chan int) {
@@ -67,13 +46,13 @@ func OnProcessTcp(p pool.Pool, gb_data *GlobalData) error {
 	//	log.Println("Poollen:", p.Len())
 	pc, err := p.Get()
 	if err == nil {
+		defer pc.Close()
 		icount, err1 := pc.Write([]byte("1111111111"))
 		if err1 != nil && icount == 0 {
 			pc.MarkUnusable()
 			gb_data.ReconnectChan <- 1
 			log.Println("OnProcessTcp Lost Connect")
 		}
-		pc.Close()
 	}
 	return err
 }
@@ -84,13 +63,7 @@ func ProcessTcp(process_id int, p pool.Pool, gb_data *GlobalData) {
 	for RUN_FLAG {
 		select {
 		case task := <-gb_data.TcpChan:
-			task.Process(process_id)
-			if err := OnProcessTcp(p, gb_data); err != nil {
-				break
-			}
-
-		case <-time.After(time.Second):
-			//			log.Println(process_id, "time_out, ProcessTcp")
+			log.Println(process_id, "TcpTask Process", task)
 			if err := OnProcessTcp(p, gb_data); err != nil {
 				break
 			}
@@ -99,34 +72,49 @@ func ProcessTcp(process_id int, p pool.Pool, gb_data *GlobalData) {
 	log.Println(process_id, "Stop ProcessTcp", p, gb_data)
 }
 
-func CreateConnect() (net.Conn, error) {
-	conn, err := net.Dial("tcp", SERVER_HOST)
-	// for err != nil {
-	// 	conn, err = net.Dial("tcp", SERVER_HOST)
-	// 	log.Println("CreateConnectFactory Error reconnect", err)
-
-	// }
-	return conn, err
+type CustomizeSetting struct {
+	ServerHost string
+	Protocol   string
+	InitCount  int
+	MaxCount   int
 }
 
-type GlobalData struct {
-	TcpChan       chan TcpTask
-	TimeChan      chan TimeTask
-	ReconnectChan chan int
+func (custom_setting *CustomizeSetting) GetFactory() pool.Factory {
+	factory := func() (net.Conn, error) {
+		conn, err := net.Dial(custom_setting.Protocol, custom_setting.ServerHost)
+		return conn, err
+	}
+	return factory
+}
+
+func (setting *CustomizeSetting) GetChannelPool() pool.Pool {
+	factory := setting.GetFactory()
+	pool_connect, start_err := pool.NewChannelPool(setting.InitCount, setting.MaxCount, factory)
+	for start_err != nil {
+		log.Println("NewChannelPool err", start_err)
+		time.Sleep(time.Second * 5)
+		pool_connect, start_err = pool.NewChannelPool(setting.InitCount, setting.MaxCount, factory)
+	}
+	return pool_connect
 }
 
 func main() {
 	ShowVersion()
-	pool_connect, start_err := pool.NewChannelPool(INIT_CONNECT, MAX_CONNECT, CreateConnect)
-	for start_err != nil {
-		log.Println("NewChannelPool err", start_err)
-		time.Sleep(time.Second * 5)
-		pool_connect, start_err = pool.NewChannelPool(INIT_CONNECT, MAX_CONNECT, CreateConnect)
-	}
+
+	SERVER_HOST := "127.0.0.1:7777"
+	INIT_CONNECT := 5
+	MAX_CONNECT := 10
+	custom_setting := new(CustomizeSetting)
+	custom_setting.Protocol = "tcp"
+	custom_setting.ServerHost = SERVER_HOST
+	custom_setting.InitCount = INIT_CONNECT
+	custom_setting.MaxCount = MAX_CONNECT
+	pool_connect := custom_setting.GetChannelPool()
 	defer pool_connect.Close()
+
 	gb_data := new(GlobalData)
-	gb_data.TcpChan = make(chan TcpTask, 20000)
-	gb_data.TimeChan = make(chan TimeTask, 20000)
+	gb_data.TcpChan = make(chan common.TcpTask, 20000)
+	gb_data.TimeChan = make(chan common.TimeTask, 20000)
 	gb_data.ReconnectChan = make(chan int, MAX_CONNECT)
 
 	go CheckReconnect(pool_connect, gb_data.ReconnectChan)
@@ -134,18 +122,10 @@ func main() {
 		go ProcessTcp(i, pool_connect, gb_data)
 	}
 
-	for i := 0; i < 100; i += 1 {
-		var task TcpTask
-		task.Cmd = fmt.Sprintf("%d", i)
-		task.Index = i
-		gb_data.TcpChan <- task
-	}
-	log.Println("AddTaskDown")
 	for RUN_FLAG {
 		select {
 		case task := <-gb_data.TimeChan:
-			task.Process()
+			log.Println("TimeTask Process", task)
 		}
-
 	}
 }
