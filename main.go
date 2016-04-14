@@ -45,7 +45,15 @@ func OnProcessTcp(p pool.Pool, gb_task *common.GlobalTask) error {
 	pc, err := p.Get()
 	if err == nil {
 		defer pc.Close()
+		log.Println("Start Send Data")
 		icount, err1 := pc.Write([]byte("1111111111"))
+		log.Println("End Send Data")
+
+		log.Println("Start Read Data")
+		buff_read := make([]byte, 1024)
+		length, _ := pc.Read(buff_read)
+		log.Println("Start Read Data", length, buff_read)
+
 		if err1 != nil && icount == 0 {
 			pc.MarkUnusable()
 			gb_task.ReconnectChan <- 1
@@ -62,6 +70,10 @@ func ProcessTcp(process_id int, p pool.Pool, gb_task *common.GlobalTask) {
 		select {
 		case task := <-gb_task.TcpChan:
 			log.Println(process_id, "TcpTask Process", task)
+			if err := OnProcessTcp(p, gb_task); err != nil {
+				break
+			}
+		case <-time.After(5 * time.Second):
 			if err := OnProcessTcp(p, gb_task); err != nil {
 				break
 			}
@@ -96,8 +108,8 @@ func main() {
 	ShowVersion()
 
 	SERVER_HOST := "127.0.0.1:7777"
-	INIT_CONNECT := 5
-	MAX_CONNECT := 10
+	INIT_CONNECT := 1
+	MAX_CONNECT := 1
 	custom_setting := new(CustomizeSetting)
 	custom_setting.Protocol = "tcp"
 	custom_setting.ServerHost = SERVER_HOST

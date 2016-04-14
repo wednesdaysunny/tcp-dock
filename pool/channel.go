@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	//	"time"
 )
 
 // channelPool implements the Pool interface based on buffered channels.
@@ -39,7 +40,7 @@ func NewChannelPool(initialCap, maxCap int, factory Factory) (Pool, error) {
 	// create initial connections, if something goes wrong,
 	// just close the pool error out.
 	for i := 0; i < initialCap; i++ {
-		conn, err := factory()
+		conn, err := createConn(factory)
 		if err != nil {
 			c.Close()
 			return nil, fmt.Errorf("factory is not able to fill the pool: %s", err)
@@ -48,6 +49,15 @@ func NewChannelPool(initialCap, maxCap int, factory Factory) (Pool, error) {
 	}
 
 	return c, nil
+}
+
+func createConn(factory Factory) (net.Conn, error) {
+	conn, err := factory()
+	if err == nil {
+		//		conn.SetWriteDeadline(100 * time.Time)
+		//		conn.SetReadDeadline(100 * time.Second)
+	}
+	return conn, err
 }
 
 func (c *channelPool) getConns() chan net.Conn {
@@ -76,11 +86,10 @@ func (c *channelPool) Get() (*PoolConn, error) {
 
 		return c.wrapConn(conn), nil
 	default:
-		conn, err := c.factory()
+		conn, err := createConn(c.factory)
 		if err != nil {
 			return nil, err
 		}
-
 		return c.wrapConn(conn), nil
 	}
 }
@@ -90,7 +99,7 @@ func (c *channelPool) Reconnect() error {
 	if conns == nil {
 		return ErrClosed
 	}
-	conn, err := c.factory()
+	conn, err := createConn(c.factory)
 	if err != nil {
 		return err
 	}

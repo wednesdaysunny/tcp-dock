@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net" //支持通讯的包
+	"time"
 )
 
 //开始服务器
@@ -30,6 +31,7 @@ func doServerStuff(conn net.Conn) {
 	checkError1(err)
 
 	for {
+		time.Sleep(time.Second * 50)
 		buf := make([]byte, 512)
 		_, err := conn.Read(buf) //读取客户机发的消息
 		flag := checkError1(err)
